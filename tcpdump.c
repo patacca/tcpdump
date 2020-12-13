@@ -2092,9 +2092,9 @@ main(int argc, char **argv)
 
 #ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
 		pd = pcap_open_offline_with_tstamp_precision(RFileName,
-		    ndo->ndo_tstamp_precision, ebuf);
+		    ndo->ndo_tstamp_precision, ebuf, fuzzBuffer, fuzzSize);
 #else
-		pd = pcap_open_offline(RFileName, ebuf);
+		pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
 #endif
 
 		if (pd == NULL)
@@ -2607,7 +2607,7 @@ DIAG_ON_CLANG(assign-enum)
 				int new_dlt;
 
 				RFileName = VFileLine;
-				pd = pcap_open_offline(RFileName, ebuf);
+				pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
 				if (pd == NULL)
 					error("%s", ebuf);
 #ifdef HAVE_CAPSICUM
