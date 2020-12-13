@@ -1970,17 +1970,18 @@ main(int argc, char **argv)
 		}
 
 	
-	unsigned char *fuzzBuffer = __AFL_FUZZ_TESTCASE_BUF;
+	unsigned char *fuzzBuffer;
+	int fuzzSize;
 	
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 	__AFL_INIT();
 #endif
 	
+	fuzzBuffer = __AFL_FUZZ_TESTCASE_BUF;
+	
 	while (__AFL_LOOP(10000)) {
 		
-		int fuzzSize = __AFL_FUZZ_TESTCASE_LEN;
-		
-		
+		fuzzSize = __AFL_FUZZ_TESTCASE_LEN;
 		
 		if (fuzzSize < 1)
 			continue;
