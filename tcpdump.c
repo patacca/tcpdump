@@ -2002,6 +2002,13 @@ main(int argc, char **argv)
 		localnet = 0; netmask = 0;
 		chroot_dir = NULL;
 		ret = NULL;
+		
+		memset(ndo, 0, sizeof(*ndo));
+		ndo_set_function_pointers(ndo);
+		if ((cp = strrchr(argv[0], PATH_SEPARATOR)) != NULL)
+			ndo->program_name = program_name = cp + 1;
+		else
+			ndo->program_name = program_name = argv[0];
 
 #ifdef HAVE_PCAP_FINDALLDEVS
 		if (Dflag)
