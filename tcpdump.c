@@ -1980,6 +1980,8 @@ main(int argc, char **argv)
 		
 		int fuzzSize = __AFL_FUZZ_TESTCASE_LEN;
 		
+		
+		
 		if (fuzzSize < 1)
 			continue;
 		
@@ -1987,22 +1989,22 @@ main(int argc, char **argv)
 		chroot_dir = NULL;
 		ret = NULL;
 
-	#ifdef HAVE_PCAP_FINDALLDEVS
+#ifdef HAVE_PCAP_FINDALLDEVS
 		if (Dflag)
 			show_devices_and_exit();
-	#endif
-	#ifdef HAVE_PCAP_FINDALLDEVS_EX
+#endif
+#ifdef HAVE_PCAP_FINDALLDEVS_EX
 		if (remote_interfaces_source != NULL)
 			show_remote_devices_and_exit();
-	#endif
+#endif
 
-	#if defined(DLT_LINUX_SLL2) && defined(HAVE_PCAP_SET_DATALINK)
+#if defined(DLT_LINUX_SLL2) && defined(HAVE_PCAP_SET_DATALINK)
 	/* Set default linktype DLT_LINUX_SLL2 when capturing on the "any" device */
 			if (device != NULL &&
 				strncmp (device, "any", strlen("any")) == 0
 				&& yflag_dlt == -1)
 				yflag_dlt = DLT_LINUX_SLL2;
-	#endif
+#endif
 
 		switch (ndo->ndo_tflag) {
 
@@ -2038,23 +2040,23 @@ main(int argc, char **argv)
 		if ((WFileName == NULL || print) && (isatty(1) || lflag))
 			timeout = 100;
 
-	#ifdef WITH_CHROOT
+#ifdef WITH_CHROOT
 		/* if run as root, prepare for chrooting */
 		if (getuid() == 0 || geteuid() == 0) {
 			/* future extensibility for cmd-line arguments */
 			if (!chroot_dir)
 				chroot_dir = WITH_CHROOT;
 		}
-	#endif
+#endif
 
-	#ifdef WITH_USER
+#ifdef WITH_USER
 		/* if run as root, prepare for dropping root privileges */
 		if (getuid() == 0 || geteuid() == 0) {
 			/* Run with '-Z root' to restore old behaviour */
 			if (!username)
 				username = WITH_USER;
 		}
-	#endif
+#endif
 
 		if (RFileName != NULL || VFileName != NULL) {
 			/*
@@ -2066,7 +2068,7 @@ main(int argc, char **argv)
 			 * In either case, we're reading a savefile, not doing
 			 * a live capture.
 			 */
-	#ifndef _WIN32
+#ifndef _WIN32
 			/*
 			 * We don't need network access, so relinquish any set-UID
 			 * or set-GID privileges we have (if any).
@@ -2078,7 +2080,7 @@ main(int argc, char **argv)
 			 */
 			if (setgid(getgid()) != 0 || setuid(getuid()) != 0 )
 				fprintf(stderr, "Warning: setgid/setuid failed !\n");
-	#endif /* _WIN32 */
+#endif /* _WIN32 */
 			if (VFileName != NULL) {
 				if (VFileName[0] == '-' && VFileName[1] == '\0')
 					VFile = stdin;
@@ -2094,22 +2096,22 @@ main(int argc, char **argv)
 				RFileName = VFileLine;
 			}
 
-	#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
+#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
 			pd = pcap_open_offline_with_tstamp_precision(RFileName,
 				ndo->ndo_tstamp_precision, ebuf, fuzzBuffer, fuzzSize);
-	#else
+#else
 			pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
-	#endif
+#endif
 
 			if (pd == NULL)
 				error("%s", ebuf);
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 			cap_rights_init(&rights, CAP_READ);
 			if (cap_rights_limit(fileno(pcap_file(pd)), &rights) < 0 &&
 				errno != ENOSYS) {
 				error("unable to limit pcap descriptor");
 			}
-	#endif
+#endif
 			dlt = pcap_datalink(pd);
 			dlt_name = pcap_datalink_val_to_name(dlt);
 			fprintf(stderr, "reading from file %s", RFileName);
@@ -2120,10 +2122,10 @@ main(int argc, char **argv)
 					pcap_datalink_val_to_description(dlt));
 			}
 			fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
-	#ifdef DLT_LINUX_SLL2
+#ifdef DLT_LINUX_SLL2
 			if (dlt == DLT_LINUX_SLL2)
 				fprintf(stderr, "Warning: interface names might be incorrect\n");
-	#endif
+#endif
 		} else if (dflag && !device) {
 			int dump_dlt = DLT_EN10MB;
 			/*
@@ -2155,7 +2157,7 @@ main(int argc, char **argv)
 				/*
 				 * No interface was specified.  Pick one.
 				 */
-	#ifdef HAVE_PCAP_FINDALLDEVS
+#ifdef HAVE_PCAP_FINDALLDEVS
 				/*
 				 * Find the list of interfaces, and pick
 				 * the first interface.
@@ -2166,7 +2168,7 @@ main(int argc, char **argv)
 					error("no interfaces available for capture");
 				device = strdup(devlist->name);
 				pcap_freealldevs(devlist);
-	#else /* HAVE_PCAP_FINDALLDEVS */
+#else /* HAVE_PCAP_FINDALLDEVS */
 				/*
 				 * Use whatever interface pcap_lookupdev()
 				 * chooses.
@@ -2174,7 +2176,7 @@ main(int argc, char **argv)
 				device = pcap_lookupdev(ebuf);
 				if (device == NULL)
 					error("%s", ebuf);
-	#endif
+#endif
 			}
 
 			/*
@@ -2189,7 +2191,7 @@ main(int argc, char **argv)
 				 * a 1-based index in the list of
 				 * interfaces.
 				 */
-	#ifdef HAVE_PCAP_FINDALLDEVS
+#ifdef HAVE_PCAP_FINDALLDEVS
 				devnum = parse_interface_number(device);
 				if (devnum == -1) {
 					/*
@@ -2211,36 +2213,36 @@ main(int argc, char **argv)
 				pd = open_interface(device, ndo, ebuf);
 				if (pd == NULL)
 					error("%s", ebuf);
-	#else /* HAVE_PCAP_FINDALLDEVS */
+#else /* HAVE_PCAP_FINDALLDEVS */
 				/*
 				 * We can't get a list of interfaces; just
 				 * fail.
 				 */
 				error("%s", ebuf);
-	#endif /* HAVE_PCAP_FINDALLDEVS */
+#endif /* HAVE_PCAP_FINDALLDEVS */
 			}
 
 			/*
 			 * Let user own process after capture device has
 			 * been opened.
 			 */
-	#ifndef _WIN32
+#ifndef _WIN32
 			if (setgid(getgid()) != 0 || setuid(getuid()) != 0)
 				fprintf(stderr, "Warning: setgid/setuid failed !\n");
-	#endif /* _WIN32 */
-	#if !defined(HAVE_PCAP_CREATE) && defined(_WIN32)
+#endif /* _WIN32 */
+#if !defined(HAVE_PCAP_CREATE) && defined(_WIN32)
 			if(Bflag != 0)
 				if(pcap_setbuff(pd, Bflag)==-1){
 					error("%s", pcap_geterr(pd));
 				}
-	#endif /* !defined(HAVE_PCAP_CREATE) && defined(_WIN32) */
+#endif /* !defined(HAVE_PCAP_CREATE) && defined(_WIN32) */
 			if (Lflag)
 				show_dlts_and_exit(pd, device);
 			if (yflag_dlt >= 0) {
-	#ifdef HAVE_PCAP_SET_DATALINK
+#ifdef HAVE_PCAP_SET_DATALINK
 				if (pcap_set_datalink(pd, yflag_dlt) < 0)
 					error("%s", pcap_geterr(pd));
-	#else
+#else
 				/*
 				 * We don't actually support changing the
 				 * data link type, so we only let them
@@ -2250,7 +2252,7 @@ main(int argc, char **argv)
 					error("%s is not one of the DLTs supported by this device\n",
 						  yflag_dlt_name);
 				}
-	#endif
+#endif
 				(void)fprintf(stderr, "%s: data link type %s\n",
 						  program_name,
 						  pcap_datalink_val_to_name(yflag_dlt));
@@ -2277,9 +2279,9 @@ main(int argc, char **argv)
 		else
 			cmdbuf = copy_argv(&argv[optind]);
 
-	#ifdef HAVE_PCAP_SET_OPTIMIZER_DEBUG
+#ifdef HAVE_PCAP_SET_OPTIMIZER_DEBUG
 		pcap_set_optimizer_debug(dflag);
-	#endif
+#endif
 		if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
 			error("%s", pcap_geterr(pd));
 		if (dflag) {
@@ -2290,28 +2292,28 @@ main(int argc, char **argv)
 			exit_tcpdump(S_SUCCESS);
 		}
 
-	#ifdef HAVE_CASPER
+#ifdef HAVE_CASPER
 		if (!ndo->ndo_nflag)
 			capdns = capdns_setup();
-	#endif	/* HAVE_CASPER */
+#endif	/* HAVE_CASPER */
 
 		init_print(ndo, localnet, netmask);
 
-	#ifndef _WIN32
+#ifndef _WIN32
 		(void)setsignal(SIGPIPE, cleanup);
 		(void)setsignal(SIGTERM, cleanup);
-	#endif /* _WIN32 */
+#endif /* _WIN32 */
 		(void)setsignal(SIGINT, cleanup);
-	#if defined(HAVE_FORK) || defined(HAVE_VFORK)
+#if defined(HAVE_FORK) || defined(HAVE_VFORK)
 		(void)setsignal(SIGCHLD, child_cleanup);
-	#endif
+#endif
 		/* Cooperate with nohup(1) */
-	#ifndef _WIN32
+#ifndef _WIN32
 		if ((oldhandler = setsignal(SIGHUP, cleanup)) != SIG_DFL)
 			(void)setsignal(SIGHUP, oldhandler);
-	#endif /* _WIN32 */
+#endif /* _WIN32 */
 
-	#ifndef _WIN32
+#ifndef _WIN32
 		/*
 		 * If a user name was specified with "-Z", attempt to switch to
 		 * that user's UID.  This would probably be used with sudo,
@@ -2331,49 +2333,49 @@ main(int argc, char **argv)
 		 */
 
 		if (getuid() == 0 || geteuid() == 0) {
-	#ifdef HAVE_LIBCAP_NG
+#ifdef HAVE_LIBCAP_NG
 			/* Initialize capng */
 			capng_clear(CAPNG_SELECT_BOTH);
 			if (username) {
-	DIAG_OFF_CLANG(assign-enum)
+DIAG_OFF_CLANG(assign-enum)
 				capng_updatev(
 					CAPNG_ADD,
 					CAPNG_PERMITTED | CAPNG_EFFECTIVE,
 					CAP_SETUID,
 					CAP_SETGID,
 					-1);
-	DIAG_ON_CLANG(assign-enum)
+DIAG_ON_CLANG(assign-enum)
 			}
 			if (chroot_dir) {
-	DIAG_OFF_CLANG(assign-enum)
+DIAG_OFF_CLANG(assign-enum)
 				capng_update(
 					CAPNG_ADD,
 					CAPNG_PERMITTED | CAPNG_EFFECTIVE,
 					CAP_SYS_CHROOT
 					);
-	DIAG_ON_CLANG(assign-enum)
+DIAG_ON_CLANG(assign-enum)
 			}
 
 			if (WFileName) {
-	DIAG_OFF_CLANG(assign-enum)
+DIAG_OFF_CLANG(assign-enum)
 				capng_update(
 					CAPNG_ADD,
 					CAPNG_PERMITTED | CAPNG_EFFECTIVE,
 					CAP_DAC_OVERRIDE
 					);
-	DIAG_ON_CLANG(assign-enum)
+DIAG_ON_CLANG(assign-enum)
 			}
 			capng_apply(CAPNG_SELECT_BOTH);
-	#endif /* HAVE_LIBCAP_NG */
+#endif /* HAVE_LIBCAP_NG */
 			if (username || chroot_dir)
 				droproot(username, chroot_dir);
 
 		}
-	#endif /* _WIN32 */
+#endif /* _WIN32 */
 
 		if (pcap_setfilter(pd, &fcode) < 0)
 			error("%s", pcap_geterr(pd));
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 		if (RFileName == NULL && VFileName == NULL && pcap_fileno(pd) != -1) {
 			static const unsigned long cmds[] = { BIOCGSTATS, BIOCROTZBUF };
 
@@ -2392,7 +2394,7 @@ main(int argc, char **argv)
 				error("unable to limit ioctls on pcap descriptor");
 			}
 		}
-	#endif
+#endif
 		if (WFileName) {
 			/* Do not exceed the default PATH_MAX for files. */
 			dumpinfo.CurrentFileName = (char *)malloc(PATH_MAX + 1);
@@ -2407,7 +2409,7 @@ main(int argc, char **argv)
 			  MakeFilename(dumpinfo.CurrentFileName, WFileName, 0, 0);
 
 			pdd = pcap_dump_open(pd, dumpinfo.CurrentFileName);
-	#ifdef HAVE_LIBCAP_NG
+#ifdef HAVE_LIBCAP_NG
 			/* Give up CAP_DAC_OVERRIDE capability.
 			 * Only allow it to be restored if the -C or -G flag have been
 			 * set since we may need to create more files later on.
@@ -2419,14 +2421,14 @@ main(int argc, char **argv)
 				CAP_DAC_OVERRIDE
 				);
 			capng_apply(CAPNG_SELECT_BOTH);
-	#endif /* HAVE_LIBCAP_NG */
+#endif /* HAVE_LIBCAP_NG */
 			if (pdd == NULL)
 				error("%s", pcap_geterr(pd));
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 			set_dumper_capsicum_rights(pdd);
-	#endif
+#endif
 			if (Cflag != 0 || Gflag != 0) {
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 				dumpinfo.WFileName = strdup(basename(WFileName));
 				if (dumpinfo.WFileName == NULL) {
 					error("Unable to allocate memory for file %s",
@@ -2448,9 +2450,9 @@ main(int argc, char **argv)
 					errno != ENOSYS) {
 					error("unable to limit dump descriptor fcntls");
 				}
-	#else	/* !HAVE_CAPSICUM */
+#else	/* !HAVE_CAPSICUM */
 				dumpinfo.WFileName = WFileName;
-	#endif
+#endif
 				callback = dump_packet_and_trunc;
 				dumpinfo.pd = pd;
 				dumpinfo.pdd = pdd;
@@ -2469,10 +2471,10 @@ main(int argc, char **argv)
 			} else
 				dumpinfo.ndo = NULL;
 
-	#ifdef HAVE_PCAP_DUMP_FLUSH
+#ifdef HAVE_PCAP_DUMP_FLUSH
 			if (Uflag)
 				pcap_dump_flush(pdd);
-	#endif
+#endif
 		} else {
 			dlt = pcap_datalink(pd);
 			ndo->ndo_if_printer = get_if_printer(dlt);
@@ -2480,17 +2482,17 @@ main(int argc, char **argv)
 			pcap_userdata = (u_char *)ndo;
 		}
 
-	#ifdef SIGNAL_REQ_INFO
+#ifdef SIGNAL_REQ_INFO
 		/*
 		 * We can't get statistics when reading from a file rather
 		 * than capturing from a device.
 		 */
 		if (RFileName == NULL)
 			(void)setsignal(SIGNAL_REQ_INFO, requestinfo);
-	#endif
-	#ifdef SIGNAL_FLUSH_PCAP
+#endif
+#ifdef SIGNAL_FLUSH_PCAP
 		(void)setsignal(SIGNAL_FLUSH_PCAP, flushpcap);
-	#endif
+#endif
 
 		if (ndo->ndo_vflag > 0 && WFileName && RFileName == NULL && !print) {
 			/*
@@ -2501,7 +2503,7 @@ main(int argc, char **argv)
 			 * together used to make a corner case, in which pcap_loop()
 			 * errored due to EINTR (see GH #155 for details).
 			 */
-	#ifdef _WIN32
+#ifdef _WIN32
 			/*
 			 * https://blogs.msdn.microsoft.com/oldnewthing/20151230-00/?p=92741
 			 *
@@ -2514,7 +2516,7 @@ main(int argc, char **argv)
 				verbose_stats_dump, NULL, 1000, 1000,
 				WT_EXECUTEDEFAULT|WT_EXECUTELONGFUNCTION);
 			setvbuf(stderr, NULL, _IONBF, 0);
-	#else /* _WIN32 */
+#else /* _WIN32 */
 			/*
 			 * Assume this is UN*X, and that it has setitimer(); that
 			 * dates back to UNIX 95.
@@ -2526,7 +2528,7 @@ main(int argc, char **argv)
 			timer.it_value.tv_sec = 1;
 			timer.it_value.tv_usec = 1;
 			setitimer(ITIMER_REAL, &timer, NULL);
-	#endif /* _WIN32 */
+#endif /* _WIN32 */
 		}
 
 		if (RFileName == NULL) {
@@ -2554,16 +2556,16 @@ main(int argc, char **argv)
 			(void)fflush(stderr);
 		}
 
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 		cansandbox = (VFileName == NULL && zflag == NULL);
-	#ifdef HAVE_CASPER
+#ifdef HAVE_CASPER
 		cansandbox = (cansandbox && (ndo->ndo_nflag || capdns != NULL));
-	#else
+#else
 		cansandbox = (cansandbox && ndo->ndo_nflag);
-	#endif /* HAVE_CASPER */
+#endif /* HAVE_CASPER */
 		if (cansandbox && cap_enter() < 0 && errno != ENOSYS)
 			error("unable to enter the capability mode");
-	#endif	/* HAVE_CAPSICUM */
+#endif	/* HAVE_CAPSICUM */
 
 		do {
 			status = pcap_loop(pd, cnt, callback, pcap_userdata);
@@ -2614,13 +2616,13 @@ main(int argc, char **argv)
 					pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
 					if (pd == NULL)
 						error("%s", ebuf);
-	#ifdef HAVE_CAPSICUM
+#ifdef HAVE_CAPSICUM
 					cap_rights_init(&rights, CAP_READ);
 					if (cap_rights_limit(fileno(pcap_file(pd)),
 						&rights) < 0 && errno != ENOSYS) {
 						error("unable to limit pcap descriptor");
 					}
-	#endif
+#endif
 					new_dlt = pcap_datalink(pd);
 					if (new_dlt != dlt) {
 						/*
