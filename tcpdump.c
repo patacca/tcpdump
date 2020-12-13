@@ -1784,7 +1784,7 @@ main(int argc, char **argv)
 #endif /* HAVE_PCAP_SETDIRECTION */
 
 		case 'r':
-			RFileName = optarg;
+			RFileName = "FUZZING";
 			break;
 
 		case 's':
