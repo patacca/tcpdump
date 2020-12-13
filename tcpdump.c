@@ -1458,9 +1458,50 @@ open_interface(const char *device, netdissect_options *ndo, char *ebuf)
 	return (pc);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+__AFL_FUZZ_INIT();
+
 int
 main(int argc, char **argv)
 {
+	
+	unsigned char *fuzzBuffer = __AFL_FUZZ_TESTCASE_BUF;
+	
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+	__AFL_INIT();
+#endif
+	
+	while (__AFL_LOOP(10000)) {
+	
+	int fuzzSize = __AFL_FUZZ_TESTCASE_LEN;
+	
+	if (fuzzSize < 1)
+		continue;
+	
 	int cnt, op, i;
 	bpf_u_int32 localnet = 0, netmask = 0;
 	char *cp, *infile, *cmdbuf, *device, *RFileName, *VFileName, *WFileName;
@@ -2537,7 +2578,7 @@ DIAG_ON_CLANG(assign-enum)
 			}
 			(void)fflush(stdout);
 		}
-                if (status == -2) {
+		if (status == -2) {
 			/*
 			 * We got interrupted. If we are reading multiple
 			 * files (via -V) set these so that we stop.
@@ -2641,8 +2682,43 @@ DIAG_ON_CLANG(assign-enum)
 
 	free(cmdbuf);
 	pcap_freecode(&fcode);
+	
+	}
+	
 	exit_tcpdump(status == -1 ? 1 : 0);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*
  * Catch a signal.
