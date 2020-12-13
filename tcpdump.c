@@ -1503,7 +1503,7 @@ main(int argc, char **argv)
 	u_char *pcap_userdata;
 	char ebuf[PCAP_ERRBUF_SIZE];
 	char VFileLine[PATH_MAX + 1];
-	const char *username;
+	const char *username = NULL;
 #ifndef _WIN32
 	const char *chroot_dir;
 #endif
@@ -1519,416 +1519,455 @@ main(int argc, char **argv)
 	cap_rights_t rights;
 	int cansandbox;
 #endif	/* HAVE_CAPSICUM */
-	int Oflag;			/* run filter code optimizer */
-	int yflag_dlt;
-	const char *yflag_dlt_name;
-	int print;
+	int Oflag = 1;			/* run filter code optimizer */
+	int yflag_dlt = -1;
+	const char *yflag_dlt_name = NULL;
+	int print = 0;
 	
 	netdissect_options Ndo;
-	netdissect_options *ndo;
+	netdissect_options *ndo = &Ndo;
 	
+	/*
+	 * Initialize the netdissect code.
+	 */
+	if (nd_init(ebuf, sizeof(ebuf)) == -1)
+		error("%s", ebuf);
+
+	memset(ndo, 0, sizeof(*ndo));
+	ndo_set_function_pointers(ndo);
 	
-		while (
-			(op = getopt_long(argc, argv, SHORTOPTS, longopts, NULL)) != -1)
-			switch (op) {
-
-			case 'a':
-				/* compatibility for old -a */
-				break;
-
-			case 'A':
-				++ndo->ndo_Aflag;
-				break;
-
-			case 'b':
-				++ndo->ndo_bflag;
-				break;
-
-	#if defined(HAVE_PCAP_CREATE) || defined(_WIN32)
-			case 'B':
-				Bflag = atoi(optarg)*1024;
-				if (Bflag <= 0)
-					error("invalid packet buffer size %s", optarg);
-				break;
-	#endif /* defined(HAVE_PCAP_CREATE) || defined(_WIN32) */
-
-			case 'c':
-				cnt = atoi(optarg);
-				if (cnt <= 0)
-					error("invalid packet count %s", optarg);
-				break;
-
-			case 'C':
-				errno = 0;
-	#ifdef HAVE_PCAP_DUMP_FTELL64
-				Cflag = strtoint64_t(optarg, &endp, 10);
-	#else
-				Cflag = strtol(optarg, &endp, 10);
+	cnt = -1;
+	device = NULL;
+	infile = NULL;
+	RFileName = NULL;
+	VFileName = NULL;
+	VFile = NULL;
+	WFileName = NULL;
+	dlt = -1;
+	if ((cp = strrchr(argv[0], PATH_SEPARATOR)) != NULL)
+		ndo->program_name = program_name = cp + 1;
+	else
+		ndo->program_name = program_name = argv[0];
+	
+	#if defined(HAVE_PCAP_WSOCKINIT)
+		if (pcap_wsockinit() != 0)
+			error("Attempting to initialize Winsock failed");
+	#elif defined(HAVE_WSOCKINIT)
+		if (wsockinit() != 0)
+			error("Attempting to initialize Winsock failed");
 	#endif
-				if (endp == optarg || *endp != '\0' || errno != 0
-					|| Cflag <= 0)
-					error("invalid file size %s", optarg);
-				/*
-				 * Will multiplying it by 1000000 overflow?
-				 */
-	#ifdef HAVE_PCAP_DUMP_FTELL64
-				if (Cflag > INT64_T_CONSTANT(0x7fffffffffffffff) / 1000000)
-	#else
-				if (Cflag > LONG_MAX / 1000000)
-	#endif
-					error("file size %s is too large", optarg);
-				Cflag *= 1000000;
-				break;
+	
+	/*
+	 * On platforms where the CPU doesn't support unaligned loads,
+	 * force unaligned accesses to abort with SIGBUS, rather than
+	 * being fixed up (slowly) by the OS kernel; on those platforms,
+	 * misaligned accesses are bugs, and we want tcpdump to crash so
+	 * that the bugs are reported.
+	 */
+	if (abort_on_misalignment(ebuf, sizeof(ebuf)) < 0)
+		error("%s", ebuf);
+	
+	while (
+		(op = getopt_long(argc, argv, SHORTOPTS, longopts, NULL)) != -1)
+		switch (op) {
 
-			case 'd':
-				++dflag;
-				break;
+		case 'a':
+			/* compatibility for old -a */
+			break;
 
-	#ifdef HAVE_PCAP_FINDALLDEVS
-			case 'D':
-				Dflag++;
-				break;
-	#endif
+		case 'A':
+			++ndo->ndo_Aflag;
+			break;
 
-	#ifdef HAVE_PCAP_FINDALLDEVS_EX
-			case OPTION_LIST_REMOTE_INTERFACES:
-				remote_interfaces_source = optarg;
-				break;
-	#endif
+		case 'b':
+			++ndo->ndo_bflag;
+			break;
 
-			case 'L':
-				Lflag++;
-				break;
+#if defined(HAVE_PCAP_CREATE) || defined(_WIN32)
+		case 'B':
+			Bflag = atoi(optarg)*1024;
+			if (Bflag <= 0)
+				error("invalid packet buffer size %s", optarg);
+			break;
+#endif /* defined(HAVE_PCAP_CREATE) || defined(_WIN32) */
 
-			case 'e':
-				++ndo->ndo_eflag;
-				break;
+		case 'c':
+			cnt = atoi(optarg);
+			if (cnt <= 0)
+				error("invalid packet count %s", optarg);
+			break;
 
-			case 'E':
-	#ifndef HAVE_LIBCRYPTO
-				warning("crypto code not compiled in");
-	#endif
-				ndo->ndo_espsecret = optarg;
-				break;
+		case 'C':
+			errno = 0;
+#ifdef HAVE_PCAP_DUMP_FTELL64
+			Cflag = strtoint64_t(optarg, &endp, 10);
+#else
+			Cflag = strtol(optarg, &endp, 10);
+#endif
+			if (endp == optarg || *endp != '\0' || errno != 0
+				|| Cflag <= 0)
+				error("invalid file size %s", optarg);
+			/*
+			 * Will multiplying it by 1000000 overflow?
+			 */
+#ifdef HAVE_PCAP_DUMP_FTELL64
+			if (Cflag > INT64_T_CONSTANT(0x7fffffffffffffff) / 1000000)
+#else
+			if (Cflag > LONG_MAX / 1000000)
+#endif
+				error("file size %s is too large", optarg);
+			Cflag *= 1000000;
+			break;
 
-			case 'f':
-				++ndo->ndo_fflag;
-				break;
+		case 'd':
+			++dflag;
+			break;
 
-			case 'F':
-				infile = optarg;
-				break;
+#ifdef HAVE_PCAP_FINDALLDEVS
+		case 'D':
+			Dflag++;
+			break;
+#endif
 
-			case 'G':
-				Gflag = atoi(optarg);
-				if (Gflag < 0)
-					error("invalid number of seconds %s", optarg);
+#ifdef HAVE_PCAP_FINDALLDEVS_EX
+		case OPTION_LIST_REMOTE_INTERFACES:
+			remote_interfaces_source = optarg;
+			break;
+#endif
 
-							/* We will create one file initially. */
-							Gflag_count = 0;
+		case 'L':
+			Lflag++;
+			break;
 
-				/* Grab the current time for rotation use. */
-				if ((Gflag_time = time(NULL)) == (time_t)-1) {
-					error("%s: can't get current time: %s",
-						__func__, pcap_strerror(errno));
-				}
-				break;
+		case 'e':
+			++ndo->ndo_eflag;
+			break;
 
-			case 'h':
-				print_usage(stdout);
-				exit_tcpdump(S_SUCCESS);
-				break;
+		case 'E':
+#ifndef HAVE_LIBCRYPTO
+			warning("crypto code not compiled in");
+#endif
+			ndo->ndo_espsecret = optarg;
+			break;
 
-			case 'H':
-				++ndo->ndo_Hflag;
-				break;
+		case 'f':
+			++ndo->ndo_fflag;
+			break;
 
-			case 'i':
-				device = optarg;
-				break;
+		case 'F':
+			infile = optarg;
+			break;
 
-	#ifdef HAVE_PCAP_CREATE
-			case 'I':
-				++Iflag;
-				break;
-	#endif /* HAVE_PCAP_CREATE */
+		case 'G':
+			Gflag = atoi(optarg);
+			if (Gflag < 0)
+				error("invalid number of seconds %s", optarg);
 
-	#ifdef HAVE_PCAP_SET_TSTAMP_TYPE
-			case 'j':
-				jflag = pcap_tstamp_type_name_to_val(optarg);
-				if (jflag < 0)
-					error("invalid time stamp type %s", optarg);
-				break;
+						/* We will create one file initially. */
+						Gflag_count = 0;
 
-			case 'J':
-				Jflag++;
-				break;
-	#endif
-
-			case 'l':
-	#ifdef _WIN32
-				/*
-				 * _IOLBF is the same as _IOFBF in Microsoft's C
-				 * libraries; the only alternative they offer
-				 * is _IONBF.
-				 *
-				 * XXX - this should really be checking for MSVC++,
-				 * not _WIN32, if, for example, MinGW has its own
-				 * C library that is more UNIX-compatible.
-				 */
-				setvbuf(stdout, NULL, _IONBF, 0);
-	#else /* _WIN32 */
-	#ifdef HAVE_SETLINEBUF
-				setlinebuf(stdout);
-	#else
-				setvbuf(stdout, NULL, _IOLBF, 0);
-	#endif
-	#endif /* _WIN32 */
-				lflag = 1;
-				break;
-
-			case 'K':
-				++ndo->ndo_Kflag;
-				break;
-
-			case 'm':
-				if (nd_have_smi_support()) {
-					if (nd_load_smi_module(optarg, ebuf, sizeof(ebuf)) == -1)
-						error("%s", ebuf);
-				} else {
-					(void)fprintf(stderr, "%s: ignoring option `-m %s' ",
-							  program_name, optarg);
-					(void)fprintf(stderr, "(no libsmi support)\n");
-				}
-				break;
-
-			case 'M':
-				/* TCP-MD5 shared secret */
-	#ifndef HAVE_LIBCRYPTO
-				warning("crypto code not compiled in");
-	#endif
-				ndo->ndo_sigsecret = optarg;
-				break;
-
-			case 'n':
-				++ndo->ndo_nflag;
-				break;
-
-			case 'N':
-				++ndo->ndo_Nflag;
-				break;
-
-			case 'O':
-				Oflag = 0;
-				break;
-
-			case 'p':
-				++pflag;
-				break;
-
-			case 'q':
-				++ndo->ndo_qflag;
-				++ndo->ndo_suppress_default_print;
-				break;
-
-	#ifdef HAVE_PCAP_SETDIRECTION
-			case 'Q':
-				if (ascii_strcasecmp(optarg, "in") == 0)
-					Qflag = PCAP_D_IN;
-				else if (ascii_strcasecmp(optarg, "out") == 0)
-					Qflag = PCAP_D_OUT;
-				else if (ascii_strcasecmp(optarg, "inout") == 0)
-					Qflag = PCAP_D_INOUT;
-				else
-					error("unknown capture direction `%s'", optarg);
-				break;
-	#endif /* HAVE_PCAP_SETDIRECTION */
-
-			case 'r':
-				RFileName = optarg;
-				break;
-
-			case 's':
-				ndo->ndo_snaplen = (int)strtol(optarg, &end, 0);
-				if (optarg == end || *end != '\0'
-					|| ndo->ndo_snaplen < 0 || ndo->ndo_snaplen > MAXIMUM_SNAPLEN)
-					error("invalid snaplen %s (must be >= 0 and <= %d)",
-						  optarg, MAXIMUM_SNAPLEN);
-				break;
-
-			case 'S':
-				++ndo->ndo_Sflag;
-				break;
-
-			case 't':
-				++ndo->ndo_tflag;
-				break;
-
-			case 'T':
-				if (ascii_strcasecmp(optarg, "vat") == 0)
-					ndo->ndo_packettype = PT_VAT;
-				else if (ascii_strcasecmp(optarg, "wb") == 0)
-					ndo->ndo_packettype = PT_WB;
-				else if (ascii_strcasecmp(optarg, "rpc") == 0)
-					ndo->ndo_packettype = PT_RPC;
-				else if (ascii_strcasecmp(optarg, "rtp") == 0)
-					ndo->ndo_packettype = PT_RTP;
-				else if (ascii_strcasecmp(optarg, "rtcp") == 0)
-					ndo->ndo_packettype = PT_RTCP;
-				else if (ascii_strcasecmp(optarg, "snmp") == 0)
-					ndo->ndo_packettype = PT_SNMP;
-				else if (ascii_strcasecmp(optarg, "cnfp") == 0)
-					ndo->ndo_packettype = PT_CNFP;
-				else if (ascii_strcasecmp(optarg, "tftp") == 0)
-					ndo->ndo_packettype = PT_TFTP;
-				else if (ascii_strcasecmp(optarg, "aodv") == 0)
-					ndo->ndo_packettype = PT_AODV;
-				else if (ascii_strcasecmp(optarg, "carp") == 0)
-					ndo->ndo_packettype = PT_CARP;
-				else if (ascii_strcasecmp(optarg, "radius") == 0)
-					ndo->ndo_packettype = PT_RADIUS;
-				else if (ascii_strcasecmp(optarg, "zmtp1") == 0)
-					ndo->ndo_packettype = PT_ZMTP1;
-				else if (ascii_strcasecmp(optarg, "vxlan") == 0)
-					ndo->ndo_packettype = PT_VXLAN;
-				else if (ascii_strcasecmp(optarg, "pgm") == 0)
-					ndo->ndo_packettype = PT_PGM;
-				else if (ascii_strcasecmp(optarg, "pgm_zmtp1") == 0)
-					ndo->ndo_packettype = PT_PGM_ZMTP1;
-				else if (ascii_strcasecmp(optarg, "lmp") == 0)
-					ndo->ndo_packettype = PT_LMP;
-				else if (ascii_strcasecmp(optarg, "resp") == 0)
-					ndo->ndo_packettype = PT_RESP;
-				else if (ascii_strcasecmp(optarg, "ptp") == 0)
-					ndo->ndo_packettype = PT_PTP;
-				else if (ascii_strcasecmp(optarg, "someip") == 0)
-					ndo->ndo_packettype = PT_SOMEIP;
-				else if (ascii_strcasecmp(optarg, "domain") == 0)
-					ndo->ndo_packettype = PT_DOMAIN;
-				else
-					error("unknown packet type `%s'", optarg);
-				break;
-
-			case 'u':
-				++ndo->ndo_uflag;
-				break;
-
-	#ifdef HAVE_PCAP_DUMP_FLUSH
-			case 'U':
-				++Uflag;
-				break;
-	#endif
-
-			case 'v':
-				++ndo->ndo_vflag;
-				break;
-
-			case 'V':
-				VFileName = optarg;
-				break;
-
-			case 'w':
-				WFileName = optarg;
-				break;
-
-			case 'W':
-				Wflag = atoi(optarg);
-				if (Wflag <= 0)
-					error("invalid number of output files %s", optarg);
-				WflagChars = getWflagChars(Wflag);
-				break;
-
-			case 'x':
-				++ndo->ndo_xflag;
-				++ndo->ndo_suppress_default_print;
-				break;
-
-			case 'X':
-				++ndo->ndo_Xflag;
-				++ndo->ndo_suppress_default_print;
-				break;
-
-			case 'y':
-				yflag_dlt_name = optarg;
-				yflag_dlt =
-					pcap_datalink_name_to_val(yflag_dlt_name);
-				if (yflag_dlt < 0)
-					error("invalid data link type %s", yflag_dlt_name);
-				break;
-
-	#ifdef HAVE_PCAP_SET_PARSER_DEBUG
-			case 'Y':
-				{
-				/* Undocumented flag */
-				pcap_set_parser_debug(1);
-				}
-				break;
-	#endif
-			case 'z':
-				zflag = optarg;
-				break;
-
-			case 'Z':
-				username = optarg;
-				break;
-
-			case '#':
-				ndo->ndo_packet_number = 1;
-				break;
-
-			case OPTION_VERSION:
-				print_version(stdout);
-				exit_tcpdump(S_SUCCESS);
-				break;
-
-	#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
-			case OPTION_TSTAMP_PRECISION:
-				ndo->ndo_tstamp_precision = tstamp_precision_from_string(optarg);
-				if (ndo->ndo_tstamp_precision < 0)
-					error("unsupported time stamp precision");
-				break;
-	#endif
-
-	#ifdef HAVE_PCAP_SET_IMMEDIATE_MODE
-			case OPTION_IMMEDIATE_MODE:
-				immediate_mode = 1;
-				break;
-	#endif
-
-			case OPTION_PRINT:
-				print = 1;
-				break;
-
-	#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
-			case OPTION_TSTAMP_MICRO:
-				ndo->ndo_tstamp_precision = PCAP_TSTAMP_PRECISION_MICRO;
-				break;
-
-			case OPTION_TSTAMP_NANO:
-				ndo->ndo_tstamp_precision = PCAP_TSTAMP_PRECISION_NANO;
-				break;
-	#endif
-
-			case OPTION_FP_TYPE:
-				/*
-				 * Print out the type of floating-point arithmetic
-				 * we're doing; it's probably IEEE, unless somebody
-				 * tries to run this on a VAX, but the precision
-				 * may differ (e.g., it might be 32-bit, 64-bit,
-				 * or 80-bit).
-				 */
-				float_type_check(0x4e93312d);
-				return 0;
-
-			case OPTION_COUNT:
-				count_mode = 1;
-				break;
-
-			default:
-				print_usage(stderr);
-				exit_tcpdump(S_ERR_HOST_PROGRAM);
-				/* NOTREACHED */
+			/* Grab the current time for rotation use. */
+			if ((Gflag_time = time(NULL)) == (time_t)-1) {
+				error("%s: can't get current time: %s",
+					__func__, pcap_strerror(errno));
 			}
+			break;
+
+		case 'h':
+			print_usage(stdout);
+			exit_tcpdump(S_SUCCESS);
+			break;
+
+		case 'H':
+			++ndo->ndo_Hflag;
+			break;
+
+		case 'i':
+			device = optarg;
+			break;
+
+#ifdef HAVE_PCAP_CREATE
+		case 'I':
+			++Iflag;
+			break;
+#endif /* HAVE_PCAP_CREATE */
+
+#ifdef HAVE_PCAP_SET_TSTAMP_TYPE
+		case 'j':
+			jflag = pcap_tstamp_type_name_to_val(optarg);
+			if (jflag < 0)
+				error("invalid time stamp type %s", optarg);
+			break;
+
+		case 'J':
+			Jflag++;
+			break;
+#endif
+
+		case 'l':
+#ifdef _WIN32
+			/*
+			 * _IOLBF is the same as _IOFBF in Microsoft's C
+			 * libraries; the only alternative they offer
+			 * is _IONBF.
+			 *
+			 * XXX - this should really be checking for MSVC++,
+			 * not _WIN32, if, for example, MinGW has its own
+			 * C library that is more UNIX-compatible.
+			 */
+			setvbuf(stdout, NULL, _IONBF, 0);
+#else /* _WIN32 */
+#ifdef HAVE_SETLINEBUF
+			setlinebuf(stdout);
+#else
+			setvbuf(stdout, NULL, _IOLBF, 0);
+#endif
+#endif /* _WIN32 */
+			lflag = 1;
+			break;
+
+		case 'K':
+			++ndo->ndo_Kflag;
+			break;
+
+		case 'm':
+			if (nd_have_smi_support()) {
+				if (nd_load_smi_module(optarg, ebuf, sizeof(ebuf)) == -1)
+					error("%s", ebuf);
+			} else {
+				(void)fprintf(stderr, "%s: ignoring option `-m %s' ",
+						  program_name, optarg);
+				(void)fprintf(stderr, "(no libsmi support)\n");
+			}
+			break;
+
+		case 'M':
+			/* TCP-MD5 shared secret */
+#ifndef HAVE_LIBCRYPTO
+			warning("crypto code not compiled in");
+#endif
+			ndo->ndo_sigsecret = optarg;
+			break;
+
+		case 'n':
+			++ndo->ndo_nflag;
+			break;
+
+		case 'N':
+			++ndo->ndo_Nflag;
+			break;
+
+		case 'O':
+			Oflag = 0;
+			break;
+
+		case 'p':
+			++pflag;
+			break;
+
+		case 'q':
+			++ndo->ndo_qflag;
+			++ndo->ndo_suppress_default_print;
+			break;
+
+#ifdef HAVE_PCAP_SETDIRECTION
+		case 'Q':
+			if (ascii_strcasecmp(optarg, "in") == 0)
+				Qflag = PCAP_D_IN;
+			else if (ascii_strcasecmp(optarg, "out") == 0)
+				Qflag = PCAP_D_OUT;
+			else if (ascii_strcasecmp(optarg, "inout") == 0)
+				Qflag = PCAP_D_INOUT;
+			else
+				error("unknown capture direction `%s'", optarg);
+			break;
+#endif /* HAVE_PCAP_SETDIRECTION */
+
+		case 'r':
+			RFileName = optarg;
+			break;
+
+		case 's':
+			ndo->ndo_snaplen = (int)strtol(optarg, &end, 0);
+			if (optarg == end || *end != '\0'
+				|| ndo->ndo_snaplen < 0 || ndo->ndo_snaplen > MAXIMUM_SNAPLEN)
+				error("invalid snaplen %s (must be >= 0 and <= %d)",
+					  optarg, MAXIMUM_SNAPLEN);
+			break;
+
+		case 'S':
+			++ndo->ndo_Sflag;
+			break;
+
+		case 't':
+			++ndo->ndo_tflag;
+			break;
+
+		case 'T':
+			if (ascii_strcasecmp(optarg, "vat") == 0)
+				ndo->ndo_packettype = PT_VAT;
+			else if (ascii_strcasecmp(optarg, "wb") == 0)
+				ndo->ndo_packettype = PT_WB;
+			else if (ascii_strcasecmp(optarg, "rpc") == 0)
+				ndo->ndo_packettype = PT_RPC;
+			else if (ascii_strcasecmp(optarg, "rtp") == 0)
+				ndo->ndo_packettype = PT_RTP;
+			else if (ascii_strcasecmp(optarg, "rtcp") == 0)
+				ndo->ndo_packettype = PT_RTCP;
+			else if (ascii_strcasecmp(optarg, "snmp") == 0)
+				ndo->ndo_packettype = PT_SNMP;
+			else if (ascii_strcasecmp(optarg, "cnfp") == 0)
+				ndo->ndo_packettype = PT_CNFP;
+			else if (ascii_strcasecmp(optarg, "tftp") == 0)
+				ndo->ndo_packettype = PT_TFTP;
+			else if (ascii_strcasecmp(optarg, "aodv") == 0)
+				ndo->ndo_packettype = PT_AODV;
+			else if (ascii_strcasecmp(optarg, "carp") == 0)
+				ndo->ndo_packettype = PT_CARP;
+			else if (ascii_strcasecmp(optarg, "radius") == 0)
+				ndo->ndo_packettype = PT_RADIUS;
+			else if (ascii_strcasecmp(optarg, "zmtp1") == 0)
+				ndo->ndo_packettype = PT_ZMTP1;
+			else if (ascii_strcasecmp(optarg, "vxlan") == 0)
+				ndo->ndo_packettype = PT_VXLAN;
+			else if (ascii_strcasecmp(optarg, "pgm") == 0)
+				ndo->ndo_packettype = PT_PGM;
+			else if (ascii_strcasecmp(optarg, "pgm_zmtp1") == 0)
+				ndo->ndo_packettype = PT_PGM_ZMTP1;
+			else if (ascii_strcasecmp(optarg, "lmp") == 0)
+				ndo->ndo_packettype = PT_LMP;
+			else if (ascii_strcasecmp(optarg, "resp") == 0)
+				ndo->ndo_packettype = PT_RESP;
+			else if (ascii_strcasecmp(optarg, "ptp") == 0)
+				ndo->ndo_packettype = PT_PTP;
+			else if (ascii_strcasecmp(optarg, "someip") == 0)
+				ndo->ndo_packettype = PT_SOMEIP;
+			else if (ascii_strcasecmp(optarg, "domain") == 0)
+				ndo->ndo_packettype = PT_DOMAIN;
+			else
+				error("unknown packet type `%s'", optarg);
+			break;
+
+		case 'u':
+			++ndo->ndo_uflag;
+			break;
+
+#ifdef HAVE_PCAP_DUMP_FLUSH
+		case 'U':
+			++Uflag;
+			break;
+#endif
+
+		case 'v':
+			++ndo->ndo_vflag;
+			break;
+
+		case 'V':
+			VFileName = optarg;
+			break;
+
+		case 'w':
+			WFileName = optarg;
+			break;
+
+		case 'W':
+			Wflag = atoi(optarg);
+			if (Wflag <= 0)
+				error("invalid number of output files %s", optarg);
+			WflagChars = getWflagChars(Wflag);
+			break;
+
+		case 'x':
+			++ndo->ndo_xflag;
+			++ndo->ndo_suppress_default_print;
+			break;
+
+		case 'X':
+			++ndo->ndo_Xflag;
+			++ndo->ndo_suppress_default_print;
+			break;
+
+		case 'y':
+			yflag_dlt_name = optarg;
+			yflag_dlt =
+				pcap_datalink_name_to_val(yflag_dlt_name);
+			if (yflag_dlt < 0)
+				error("invalid data link type %s", yflag_dlt_name);
+			break;
+
+#ifdef HAVE_PCAP_SET_PARSER_DEBUG
+		case 'Y':
+			{
+			/* Undocumented flag */
+			pcap_set_parser_debug(1);
+			}
+			break;
+#endif
+		case 'z':
+			zflag = optarg;
+			break;
+
+		case 'Z':
+			username = optarg;
+			break;
+
+		case '#':
+			ndo->ndo_packet_number = 1;
+			break;
+
+		case OPTION_VERSION:
+			print_version(stdout);
+			exit_tcpdump(S_SUCCESS);
+			break;
+
+#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
+		case OPTION_TSTAMP_PRECISION:
+			ndo->ndo_tstamp_precision = tstamp_precision_from_string(optarg);
+			if (ndo->ndo_tstamp_precision < 0)
+				error("unsupported time stamp precision");
+			break;
+#endif
+
+#ifdef HAVE_PCAP_SET_IMMEDIATE_MODE
+		case OPTION_IMMEDIATE_MODE:
+			immediate_mode = 1;
+			break;
+#endif
+
+		case OPTION_PRINT:
+			print = 1;
+			break;
+
+#ifdef HAVE_PCAP_SET_TSTAMP_PRECISION
+		case OPTION_TSTAMP_MICRO:
+			ndo->ndo_tstamp_precision = PCAP_TSTAMP_PRECISION_MICRO;
+			break;
+
+		case OPTION_TSTAMP_NANO:
+			ndo->ndo_tstamp_precision = PCAP_TSTAMP_PRECISION_NANO;
+			break;
+#endif
+
+		case OPTION_FP_TYPE:
+			/*
+			 * Print out the type of floating-point arithmetic
+			 * we're doing; it's probably IEEE, unless somebody
+			 * tries to run this on a VAX, but the precision
+			 * may differ (e.g., it might be 32-bit, 64-bit,
+			 * or 80-bit).
+			 */
+			float_type_check(0x4e93312d);
+			return 0;
+
+		case OPTION_COUNT:
+			count_mode = 1;
+			break;
+
+		default:
+			print_usage(stderr);
+			exit_tcpdump(S_ERR_HOST_PROGRAM);
+			/* NOTREACHED */
+		}
 
 	
 	unsigned char *fuzzBuffer = __AFL_FUZZ_TESTCASE_BUF;
@@ -1945,55 +1984,8 @@ main(int argc, char **argv)
 			continue;
 		
 		localnet = 0; netmask = 0;
-		username = NULL;
 		chroot_dir = NULL;
 		ret = NULL;
-		Oflag = 1;
-		yflag_dlt = -1;
-		yflag_dlt_name = NULL;
-		print = 0;
-
-		ndo = &Ndo;
-
-		/*
-		 * Initialize the netdissect code.
-		 */
-		if (nd_init(ebuf, sizeof(ebuf)) == -1)
-			error("%s", ebuf);
-
-		memset(ndo, 0, sizeof(*ndo));
-		ndo_set_function_pointers(ndo);
-
-		cnt = -1;
-		device = NULL;
-		infile = NULL;
-		RFileName = NULL;
-		VFileName = NULL;
-		VFile = NULL;
-		WFileName = NULL;
-		dlt = -1;
-		if ((cp = strrchr(argv[0], PATH_SEPARATOR)) != NULL)
-			ndo->program_name = program_name = cp + 1;
-		else
-			ndo->program_name = program_name = argv[0];
-
-	#if defined(HAVE_PCAP_WSOCKINIT)
-		if (pcap_wsockinit() != 0)
-			error("Attempting to initialize Winsock failed");
-	#elif defined(HAVE_WSOCKINIT)
-		if (wsockinit() != 0)
-			error("Attempting to initialize Winsock failed");
-	#endif
-
-		/*
-		 * On platforms where the CPU doesn't support unaligned loads,
-		 * force unaligned accesses to abort with SIGBUS, rather than
-		 * being fixed up (slowly) by the OS kernel; on those platforms,
-		 * misaligned accesses are bugs, and we want tcpdump to crash so
-		 * that the bugs are reported.
-		 */
-		if (abort_on_misalignment(ebuf, sizeof(ebuf)) < 0)
-			error("%s", ebuf);
 
 	#ifdef HAVE_PCAP_FINDALLDEVS
 		if (Dflag)
