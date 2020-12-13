@@ -1489,6 +1489,7 @@ int
 main(int argc, char **argv)
 {
 	
+	int status;
 	unsigned char *fuzzBuffer = __AFL_FUZZ_TESTCASE_BUF;
 	
 #ifdef __AFL_HAVE_MANUAL_CONTROL
@@ -1527,7 +1528,6 @@ main(int argc, char **argv)
 	pcap_if_t *devlist;
 	long devnum;
 #endif
-	int status;
 	FILE *VFile;
 #ifdef HAVE_CAPSICUM
 	cap_rights_t rights;
