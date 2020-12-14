@@ -1982,8 +1982,6 @@ main(int argc, char **argv)
 			/* NOTREACHED */
 		}
 
-
-	init_print(ndo, localnet, netmask);
 	
 	unsigned char *fuzzBuffer;
 	int fuzzSize;
@@ -2324,6 +2322,8 @@ main(int argc, char **argv)
 		if (!ndo->ndo_nflag)
 			capdns = capdns_setup();
 #endif	/* HAVE_CASPER */
+
+		init_print(ndo, localnet, netmask);
 
 #ifndef _WIN32
 		(void)setsignal(SIGPIPE, cleanup);
