@@ -1506,7 +1506,7 @@ main(int argc, char **argv)
 	char *cp, *infile, *cmdbuf, *device, *RFileName, *VFileName, *WFileName;
 	char *endp;
 	pcap_handler callback;
-	int dlt;
+	int dlt=0, new_dlt;
 	const char *dlt_name;
 	struct bpf_program fcode;
 #ifndef _WIN32
@@ -2135,7 +2135,13 @@ main(int argc, char **argv)
 				error("unable to limit pcap descriptor");
 			}
 #endif
-			dlt = pcap_datalink(pd);
+			new_dlt = pcap_datalink(pd);
+			if (new_dlt != dlt) {
+				dlt = new_dlt;
+				ndo->ndo_if_printer = get_if_printer(dlt);
+				if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
+					error("%s", pcap_geterr(pd));
+			}
 			dlt_name = pcap_datalink_val_to_name(dlt);
 			fprintf(stderr, "reading from file %s", RFileName);
 			if (dlt_name == NULL) {
