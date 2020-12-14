@@ -1506,7 +1506,7 @@ main(int argc, char **argv)
 	char *cp, *infile, *cmdbuf, *device, *RFileName, *VFileName, *WFileName;
 	char *endp;
 	pcap_handler callback;
-	int dlt = 0, new_dlt;
+	int dlt;
 	const char *dlt_name;
 	struct bpf_program fcode;
 #ifndef _WIN32
@@ -1982,10 +1982,11 @@ main(int argc, char **argv)
 			/* NOTREACHED */
 		}
 
+
+	init_print(ndo, localnet, netmask);
 	
 	unsigned char *fuzzBuffer;
 	int fuzzSize;
-	int cont = 0;
 	
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 	__AFL_INIT();
@@ -2000,10 +2001,6 @@ main(int argc, char **argv)
 		if (fuzzSize < 1)
 			continue;
 		
-		cont++;
-		if (cont == 1) {
-			
-			
 		localnet = 0; netmask = 0;
 		chroot_dir = NULL;
 		ret = NULL;
@@ -2138,13 +2135,7 @@ main(int argc, char **argv)
 				error("unable to limit pcap descriptor");
 			}
 #endif
-			new_dlt = pcap_datalink(pd);
-			if (new_dlt != dlt) {
-				dlt = new_dlt;
-				ndo->ndo_if_printer = get_if_printer(dlt);
-				if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
-					error("%s", pcap_geterr(pd));
-			}
+			dlt = pcap_datalink(pd);
 			dlt_name = pcap_datalink_val_to_name(dlt);
 			fprintf(stderr, "reading from file %s", RFileName);
 			if (dlt_name == NULL) {
@@ -2328,8 +2319,6 @@ main(int argc, char **argv)
 		if (!ndo->ndo_nflag)
 			capdns = capdns_setup();
 #endif	/* HAVE_CASPER */
-
-		init_print(ndo, localnet, netmask);
 
 #ifndef _WIN32
 		(void)setsignal(SIGPIPE, cleanup);
@@ -2599,187 +2588,7 @@ DIAG_ON_CLANG(assign-enum)
 			error("unable to enter the capability mode");
 #endif	/* HAVE_CAPSICUM */
 
-		status = pcap_loop(pd, cnt, callback, pcap_userdata);
-		if (WFileName == NULL) {
-			/*
-			 * We're printing packets.  Flush the printed output,
-			 * so it doesn't get intermingled with error output.
-			 */
-			if (status == -2) {
-				/*
-				 * We got interrupted, so perhaps we didn't
-				 * manage to finish a line we were printing.
-				 * Print an extra newline, just in case.
-				 */
-				putchar('\n');
-			}
-			(void)fflush(stdout);
-		}
-		if (status == -2) {
-			/*
-			 * We got interrupted. If we are reading multiple
-			 * files (via -V) set these so that we stop.
-			 */
-			VFileName = NULL;
-			ret = NULL;
-		}
-		if (status == -1) {
-			/*
-			 * Error.  Report it.
-			 */
-			(void)fprintf(stderr, "%s: pcap_loop: %s\n",
-				program_name, pcap_geterr(pd));
-		}
-		if (RFileName == NULL) {
-			/*
-			 * We're doing a live capture.  Report the capture
-			 * statistics.
-			 */
-			info(1);
-		}
-		pcap_close(pd);
-		if (VFileName != NULL) {
-			ret = get_next_file(VFile, VFileLine);
-			if (ret) {
-				int new_dlt;
-
-				RFileName = VFileLine;
-				pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
-				if (pd == NULL)
-					error("%s", ebuf);
-#ifdef HAVE_CAPSICUM
-				cap_rights_init(&rights, CAP_READ);
-				if (cap_rights_limit(fileno(pcap_file(pd)),
-					&rights) < 0 && errno != ENOSYS) {
-					error("unable to limit pcap descriptor");
-				}
-#endif
-				new_dlt = pcap_datalink(pd);
-				if (new_dlt != dlt) {
-					/*
-					 * The new file has a different
-					 * link-layer header type from the
-					 * previous one.
-					 */
-					if (WFileName != NULL) {
-						/*
-						 * We're writing raw packets
-						 * that match the filter to
-						 * a pcap file.  pcap files
-						 * don't support multiple
-						 * different link-layer
-						 * header types, so we fail
-						 * here.
-						 */
-						error("%s: new dlt does not match original", RFileName);
-					}
-
-					/*
-					 * We're printing the decoded packets;
-					 * switch to the new DLT.
-					 *
-					 * To do that, we need to change
-					 * the printer, change the DLT name,
-					 * and recompile the filter with
-					 * the new DLT.
-					 */
-					dlt = new_dlt;
-					ndo->ndo_if_printer = get_if_printer(dlt);
-					if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
-						error("%s", pcap_geterr(pd));
-				}
-
-				/*
-				 * Set the filter on the new file.
-				 */
-				if (pcap_setfilter(pd, &fcode) < 0)
-					error("%s", pcap_geterr(pd));
-
-				/*
-				 * Report the new file.
-				 */
-				dlt_name = pcap_datalink_val_to_name(dlt);
-				fprintf(stderr, "reading from file %s", RFileName);
-				if (dlt_name == NULL) {
-					fprintf(stderr, ", link-type %u", dlt);
-				} else {
-					fprintf(stderr, ", link-type %s (%s)",
-						dlt_name,
-						pcap_datalink_val_to_description(dlt));
-				}
-				fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
-			}
-		}
-			
-		} else {
-			
-			int new_dlt;
-
-			pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
-			if (pd == NULL)
-				error("%s", ebuf);
-#ifdef HAVE_CAPSICUM
-			cap_rights_init(&rights, CAP_READ);
-			if (cap_rights_limit(fileno(pcap_file(pd)),
-				&rights) < 0 && errno != ENOSYS) {
-				error("unable to limit pcap descriptor");
-			}
-#endif
-			new_dlt = pcap_datalink(pd);
-			if (new_dlt != dlt) {
-				/*
-				 * The new file has a different
-				 * link-layer header type from the
-				 * previous one.
-				 */
-				if (WFileName != NULL) {
-					/*
-					 * We're writing raw packets
-					 * that match the filter to
-					 * a pcap file.  pcap files
-					 * don't support multiple
-					 * different link-layer
-					 * header types, so we fail
-					 * here.
-					 */
-					error("%s: new dlt does not match original", RFileName);
-				}
-
-				/*
-				 * We're printing the decoded packets;
-				 * switch to the new DLT.
-				 *
-				 * To do that, we need to change
-				 * the printer, change the DLT name,
-				 * and recompile the filter with
-				 * the new DLT.
-				 */
-				dlt = new_dlt;
-				ndo->ndo_if_printer = get_if_printer(dlt);
-				if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
-					error("%s", pcap_geterr(pd));
-			}
-
-			/*
-			 * Set the filter on the new file.
-			 */
-			if (pcap_setfilter(pd, &fcode) < 0)
-				error("%s", pcap_geterr(pd));
-
-			/*
-			 * Report the new file.
-			 */
-			dlt_name = pcap_datalink_val_to_name(dlt);
-			fprintf(stderr, "reading from file %s", RFileName);
-			if (dlt_name == NULL) {
-				fprintf(stderr, ", link-type %u", dlt);
-			} else {
-				fprintf(stderr, ", link-type %s (%s)",
-					dlt_name,
-					pcap_datalink_val_to_description(dlt));
-			}
-			fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
-			
+		do {
 			status = pcap_loop(pd, cnt, callback, pcap_userdata);
 			if (WFileName == NULL) {
 				/*
@@ -2819,8 +2628,80 @@ DIAG_ON_CLANG(assign-enum)
 				info(1);
 			}
 			pcap_close(pd);
-			
+			if (VFileName != NULL) {
+				ret = get_next_file(VFile, VFileLine);
+				if (ret) {
+					int new_dlt;
+
+					RFileName = VFileLine;
+					pd = pcap_open_offline(RFileName, ebuf, fuzzBuffer, fuzzSize);
+					if (pd == NULL)
+						error("%s", ebuf);
+#ifdef HAVE_CAPSICUM
+					cap_rights_init(&rights, CAP_READ);
+					if (cap_rights_limit(fileno(pcap_file(pd)),
+						&rights) < 0 && errno != ENOSYS) {
+						error("unable to limit pcap descriptor");
+					}
+#endif
+					new_dlt = pcap_datalink(pd);
+					if (new_dlt != dlt) {
+						/*
+						 * The new file has a different
+						 * link-layer header type from the
+						 * previous one.
+						 */
+						if (WFileName != NULL) {
+							/*
+							 * We're writing raw packets
+							 * that match the filter to
+							 * a pcap file.  pcap files
+							 * don't support multiple
+							 * different link-layer
+							 * header types, so we fail
+							 * here.
+							 */
+							error("%s: new dlt does not match original", RFileName);
+						}
+
+						/*
+						 * We're printing the decoded packets;
+						 * switch to the new DLT.
+						 *
+						 * To do that, we need to change
+						 * the printer, change the DLT name,
+						 * and recompile the filter with
+						 * the new DLT.
+						 */
+						dlt = new_dlt;
+						ndo->ndo_if_printer = get_if_printer(dlt);
+						if (pcap_compile(pd, &fcode, cmdbuf, Oflag, netmask) < 0)
+							error("%s", pcap_geterr(pd));
+					}
+
+					/*
+					 * Set the filter on the new file.
+					 */
+					if (pcap_setfilter(pd, &fcode) < 0)
+						error("%s", pcap_geterr(pd));
+
+					/*
+					 * Report the new file.
+					 */
+					dlt_name = pcap_datalink_val_to_name(dlt);
+					fprintf(stderr, "reading from file %s", RFileName);
+					if (dlt_name == NULL) {
+						fprintf(stderr, ", link-type %u", dlt);
+					} else {
+						fprintf(stderr, ", link-type %s (%s)",
+							dlt_name,
+							pcap_datalink_val_to_description(dlt));
+					}
+					fprintf(stderr, ", snapshot length %d\n", pcap_snapshot(pd));
+				}
+			}
 		}
+		while (ret != NULL);
 
 		if (count_mode && RFileName != NULL)
 			fprintf(stdout, "%u packet%s\n", packets_captured,
